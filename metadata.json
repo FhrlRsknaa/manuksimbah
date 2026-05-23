@@ -1,0 +1,6 @@
+{
+  "name": "Manuk Mbah",
+  "description": "Game Flappy Bird asik bertema nusantara dengan karakter burung kakek berblangkon, dilengkapi animasi indah, suara musik synth, dan rintangan bambu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
