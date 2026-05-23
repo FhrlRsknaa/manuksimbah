@@ -34,6 +34,30 @@ export default function App() {
     }
   }, []);
 
+  // Start music as early as possible on first user interaction to bypass browser policies
+  useEffect(() => {
+    const playBgmOnGesture = () => {
+      gameAudio.playMusic();
+      // Remove listeners once sound starts successfully
+      window.removeEventListener('click', playBgmOnGesture);
+      window.removeEventListener('keydown', playBgmOnGesture);
+      window.removeEventListener('touchstart', playBgmOnGesture);
+    };
+
+    window.addEventListener('click', playBgmOnGesture);
+    window.addEventListener('keydown', playBgmOnGesture);
+    window.addEventListener('touchstart', playBgmOnGesture);
+
+    // Also attempt playing right away
+    gameAudio.playMusic();
+
+    return () => {
+      window.removeEventListener('click', playBgmOnGesture);
+      window.removeEventListener('keydown', playBgmOnGesture);
+      window.removeEventListener('touchstart', playBgmOnGesture);
+    };
+  }, []);
+
   const handleStartGame = (mode: GameMode) => {
     setGameMode(mode);
     setGameState('PLAYING');
@@ -47,7 +71,7 @@ export default function App() {
 
   const handleGameOver = (finalScore: number, pipesPassed: number, jumps: number) => {
     setGameState('GAMEOVER');
-    gameAudio.pauseMusic();
+    // Keep background music running always as requested
 
     setStats(prev => {
       const nextHighScore = Math.max(finalScore, prev.highScore);
@@ -64,7 +88,7 @@ export default function App() {
 
   const handleGoToMenu = () => {
     setGameState('MENU');
-    gameAudio.pauseMusic();
+    // Keep background music running always as requested
   };
 
   // Files loader callbacks

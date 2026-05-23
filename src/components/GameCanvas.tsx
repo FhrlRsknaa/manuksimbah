@@ -32,12 +32,12 @@ const HARD_CONFIG: GameConfig = {
 };
 
 const ULTIMATE_CONFIG: GameConfig = {
-  gravity: 0.29, // Extremely fast fall, very heavy physics!
-  jumpForce: -5.4, // Punchy and quick high force jump
-  pipeSpeed: 4.6, // Crazy fast scrolling speed (paling kencang!)
-  pipeSpawnInterval: 65, // Very short spawn intervals - obstacles come super fast!
-  pipeGap: 125, // Tighter gap for extreme precision (ultimate challenge)
-  minPipeHeight: 60,
+  gravity: 0.42, // Super fast fall, very heavy physics!
+  jumpForce: -7.2, // Punchy and quick heavy jump
+  pipeSpeed: 7.2, // Crazy fast scrolling speed (super cepat, paling tercepat!)
+  pipeSpawnInterval: 38, // Extremely short spawn intervals - obstacles come rapid-fire!
+  pipeGap: 110, // Extreme tight gap (paling susah!)
+  minPipeHeight: 50,
 };
 
 const DEFAULT_BIRD: BirdState = {
@@ -65,6 +65,13 @@ export default function GameCanvas({
   const config = 
     difficulty === 'ultimate' ? ULTIMATE_CONFIG :
     difficulty === 'hard' ? HARD_CONFIG : EASY_CONFIG;
+
+  // Stale-defense reference layer
+  const currentPropsRef = useRef({ difficulty, gameMode, config });
+  useEffect(() => {
+    currentPropsRef.current = { difficulty, gameMode, config };
+  }, [difficulty, gameMode, config]);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // States to keep track for statistics
@@ -133,7 +140,7 @@ export default function GameCanvas({
       window.removeEventListener('keydown', handleKeyDown);
       stopGameLoop();
     };
-  }, [gameState, customBirdUrl]);
+  }, [gameState, customBirdUrl, gameMode, difficulty]);
 
   const loadDefaultBirdImage = () => {
     const bird = new Image();
@@ -205,7 +212,9 @@ export default function GameCanvas({
   const triggerFlap = () => {
     if (gameState !== 'PLAYING') return;
 
-    if (gameMode === 'race') {
+    const { gameMode: activeGameMode, config: activeConfig } = currentPropsRef.current;
+
+    if (activeGameMode === 'race') {
       const groundLimit = CANVAS_HEIGHT - 100;
       const isCurrentlyOnGround = birdRef.current.y >= groundLimit - 50;
 
@@ -219,7 +228,7 @@ export default function GameCanvas({
       }
 
       // Stronger upward impulse to jump over gaps
-      birdRef.current.vy = config.jumpForce * 1.35;
+      birdRef.current.vy = activeConfig.jumpForce * 1.35;
       jumpsRef.current += 1;
       gameAudio.playJumpSound();
 
@@ -233,7 +242,7 @@ export default function GameCanvas({
       );
     } else {
       // Apply simple slow upward velocity
-      birdRef.current.vy = config.jumpForce;
+      birdRef.current.vy = activeConfig.jumpForce;
       birdRef.current.targetAngle = -0.35; // Tilt up
       birdRef.current.flapTime = 10;
       jumpsRef.current += 1;
@@ -290,6 +299,11 @@ export default function GameCanvas({
     triggerFlap();
   };
 
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    triggerFlap();
+  };
+
   // Start game loop when state switches to playing
   useEffect(() => {
     if (gameState === 'PLAYING') {
@@ -301,6 +315,7 @@ export default function GameCanvas({
   }, [gameState]);
 
   const resetGame = () => {
+    const { gameMode: activeGameMode } = currentPropsRef.current;
     scoreRef.current = 0;
     jumpsRef.current = 0;
     pipesPassedRef.current = 0;
@@ -309,7 +324,7 @@ export default function GameCanvas({
     onScoreUpdate(0);
 
     const groundLimit = CANVAS_HEIGHT - 100;
-    const initialY = gameMode === 'race' ? (groundLimit - 48) : 250;
+    const initialY = activeGameMode === 'race' ? (groundLimit - 48) : 250;
 
     birdRef.current = { 
       ...DEFAULT_BIRD, 
@@ -322,7 +337,7 @@ export default function GameCanvas({
     raceObstaclesRef.current = [];
     particlesRef.current = [];
 
-    if (gameMode === 'race') {
+    if (activeGameMode === 'race') {
       spawnRaceObstacle();
     } else {
       spawnPipe();
@@ -348,6 +363,7 @@ export default function GameCanvas({
   };
 
   const spawnPipe = () => {
+    const { config } = currentPropsRef.current;
     const width = 64;
     // Calculate randomized bamboo obstacle lengths
     const totalPlayHeight = CANVAS_HEIGHT - 100; // Leaving room for the ground layer
@@ -372,8 +388,32 @@ export default function GameCanvas({
   const startGameLoop = () => {
     stopGameLoop();
     
-    const loop = () => {
-      updateGame();
+    let lastTime: number | null = null;
+    const timestep = 1000 / 60; // 60 updates per second (60 FPS)
+    let accumulator = 0;
+
+    const loop = (currentTime: number) => {
+      const timeNow = currentTime || performance.now();
+      if (lastTime === null) {
+        lastTime = timeNow;
+      }
+      let delta = timeNow - lastTime;
+      if (isNaN(delta) || delta < 0) {
+        delta = timestep;
+      }
+      if (delta > 250) delta = 250; // Cap delay logic to avoid spiral on focus loss
+      lastTime = timeNow;
+
+      accumulator += delta;
+      if (isNaN(accumulator)) {
+        accumulator = 0;
+      }
+
+      while (accumulator >= timestep) {
+        updateGame();
+        accumulator -= timestep;
+      }
+
       drawGame();
       activeLoopRef.current = requestAnimationFrame(loop);
     };
@@ -401,6 +441,7 @@ export default function GameCanvas({
 
   // Physics update step
   const updateGame = () => {
+    const { gameMode, config } = currentPropsRef.current;
     frameCountRef.current++;
     const bird = birdRef.current;
     const groundLimit = CANVAS_HEIGHT - 100;
@@ -412,8 +453,9 @@ export default function GameCanvas({
 
       // 1. Position update (gravity)
       bird.vy += config.gravity;
-      if (bird.vy > 9) {
-        bird.vy = 9; // terminal velocity for the car falling
+      const terminalCarVelocity = difficulty === 'ultimate' ? 14 : 9;
+      if (bird.vy > terminalCarVelocity) {
+        bird.vy = terminalCarVelocity; // terminal velocity for the car falling
       }
       bird.y += bird.vy;
 
@@ -542,9 +584,10 @@ export default function GameCanvas({
       // --- ORIGINAL FLAPPY CLASSIC MODE ---
       // Slow, floaty gravity update ("jatuhnya agak lambat")
       bird.vy += config.gravity;
-      // Cap falling velocity so it feels relaxing and responsive
-      if (bird.vy > 4.5) {
-        bird.vy = 4.5;
+      // Cap falling velocity based on difficulty so it matches physics speed
+      const terminalVelocity = difficulty === 'ultimate' ? 12.0 : (difficulty === 'hard' ? 7.0 : 4.5);
+      if (bird.vy > terminalVelocity) {
+        bird.vy = terminalVelocity;
       }
       bird.y += bird.vy;
 
@@ -653,6 +696,7 @@ export default function GameCanvas({
 
   // High performance custom Canvas drawings
   const drawGame = () => {
+    const { gameMode } = currentPropsRef.current;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -1219,7 +1263,8 @@ export default function GameCanvas({
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         onClick={handleCanvasClick}
-        className="cursor-pointer max-w-full rounded-2xl border-4 border-amber-900/65 shadow-2xl overflow-hidden aspect-[420/620]"
+        onTouchStart={handleCanvasTouchStart}
+        className="cursor-pointer max-w-full rounded-2xl border-4 border-amber-900/65 shadow-2xl overflow-hidden aspect-[420/620] touch-none select-none"
         id="game-canvas"
       />
       

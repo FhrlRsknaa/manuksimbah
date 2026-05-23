@@ -133,43 +133,58 @@ export default function MainMenu({
           </button>
         </div>
 
-        {/* Dynamic Level Difficulty Selectors */}
-        <div className="flex bg-white/20 backdrop-blur-md rounded-xl p-0.5 border border-white/30 w-[270px] sm:w-[310px] mt-3 z-10 font-bold text-[9px] sm:text-[10px] shadow-xs select-none">
+        {/* Dynamic Level Difficulty Selectors - Upgraded with premium touch-safety target and instant mobile interaction handlers */}
+        <div className="flex bg-white/20 backdrop-blur-md rounded-2xl p-1.5 border border-white/30 w-[290px] sm:w-[330px] mt-3.5 z-10 font-bold text-[10px] sm:text-[11px] shadow-md select-none touch-manipulation">
           <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              onDifficultyChange('easy');
+              gameAudio.playJumpSound();
+            }}
             onClick={() => {
               onDifficultyChange('easy');
               gameAudio.playJumpSound();
             }}
-            className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+            className={`flex-1 py-3 px-1 rounded-xl transition-all cursor-pointer text-center font-bold active:scale-95 ${
               difficulty === 'easy'
-                ? 'bg-[#4a2c2a] text-[#E9E4D4] shadow-sm'
-                : 'text-[#4a2c2a] hover:bg-white/20'
+                ? 'bg-[#4a2c2a] text-[#E9E4D4] shadow-md scale-102 font-black'
+                : 'text-[#4a2c2a] hover:bg-white/25'
             }`}
           >
             Santai (Easy)
           </button>
           <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              onDifficultyChange('hard');
+              gameAudio.playJumpSound();
+            }}
             onClick={() => {
               onDifficultyChange('hard');
               gameAudio.playJumpSound();
             }}
-            className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+            className={`flex-1 py-3 px-1 rounded-xl transition-all cursor-pointer text-center font-bold active:scale-95 ${
               difficulty === 'hard'
-                ? 'bg-[#FF4444] text-white shadow-sm'
-                : 'text-[#4a2c2a] hover:bg-white/20'
+                ? 'bg-[#FF4444] text-white shadow-md scale-102 font-black'
+                : 'text-[#4a2c2a] hover:bg-white/25'
             }`}
           >
             Kencang (Hard)
           </button>
           <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              onDifficultyChange('ultimate');
+              gameAudio.playJumpSound();
+            }}
             onClick={() => {
               onDifficultyChange('ultimate');
               gameAudio.playJumpSound();
             }}
-            className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center font-extrabold uppercase ${
+            className={`flex-1 py-3 px-1 rounded-xl transition-all cursor-pointer text-center font-extrabold uppercase active:scale-95 ${
               difficulty === 'ultimate'
-                ? 'bg-gradient-to-r from-red-600 via-amber-600 to-red-600 text-white shadow-md animate-pulse'
-                : 'text-red-700 hover:bg-white/20 font-bold'
+                ? 'bg-gradient-to-r from-red-600 via-amber-600 to-red-600 text-white shadow-lg animate-pulse-slow font-black scale-102'
+                : 'text-red-700 hover:bg-white/25 font-black'
             }`}
           >
             Ultimate (WNI)
