@@ -5,7 +5,7 @@ class AudioEngine {
   private ctx: AudioContext | null = null;
   private bgmInterval: any = null;
   private isMuted: boolean = false;
-  private volume: number = 0.3; // Default comfortable volume
+  private volume: number = 100; // Default comfortable volume
   private isBgmPlaying: boolean = false;
   private bgmTempo: number = 135; // bpm
   private customMusicFile: HTMLAudioElement | null = null;
