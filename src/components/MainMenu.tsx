@@ -304,12 +304,30 @@ export default function MainMenu({
                     setShowModeSelection(false);
                     onStartGame('race');
                   }}
-                  className="w-full p-4 bg-white/45 hover:bg-white/75 border border-white/60 rounded-[22px] text-left transition-all shadow-sm flex items-start gap-3 cursor-pointer select-none animate-pulse-slow"
+                  className="w-full p-4 bg-white/45 hover:bg-white/75 border border-white/60 rounded-[22px] text-left transition-all shadow-sm flex items-start gap-3 cursor-pointer select-none"
                 >
                   <span className="text-3xl p-1 bg-red-100 rounded-xl leading-none">🏎️</span>
                   <div className="flex-1">
-                    <h4 className="font-serif font-extrabold text-sm text-[#4a2c2a] leading-tight">2. Manuk Balapan (Baru)</h4>
+                    <h4 className="font-serif font-extrabold text-sm text-[#4a2c2a] leading-tight">2. Manuk Balapan</h4>
                     <p className="text-[10px] text-[#8B4513] font-medium leading-normal mt-0.5">Kendarai mobil gokart melompati balok rintangan & jurang maut Pou style!</p>
+                  </div>
+                </motion.button>
+
+                {/* Mode 3: Air Hockey VS Bot */}
+                <motion.button
+                  whileHover={{ scale: 1.03, translateY: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    gameAudio.playJumpSound();
+                    setShowModeSelection(false);
+                    onStartGame('hockey');
+                  }}
+                  className="w-full p-4 bg-white/45 hover:bg-white/75 border border-white/60 rounded-[22px] text-left transition-all shadow-sm flex items-start gap-3 cursor-pointer select-none animate-pulse-slow"
+                >
+                  <span className="text-3xl p-1 bg-blue-100 rounded-xl leading-none">🏓</span>
+                  <div className="flex-1">
+                    <h4 className="font-serif font-extrabold text-sm text-[#4a2c2a] leading-tight">3. Air Hockey VS Bot (Baru)</h4>
+                    <p className="text-[10px] text-[#8B4513] font-medium leading-normal mt-0.5">Geser pemukul untuk cetak 7 gol melawan Bot Mbah! Mode Ultimate bot sangat agresif!</p>
                   </div>
                 </motion.button>
               </div>

@@ -8,7 +8,7 @@ export interface GameConfig {
 }
 
 export type GameState = 'MENU' | 'PLAYING' | 'GAMEOVER';
-export type GameMode = 'classic' | 'race';
+export type GameMode = 'classic' | 'race' | 'hockey';
 
 export interface RaceObstacle {
   x: number;

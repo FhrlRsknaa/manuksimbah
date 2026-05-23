@@ -96,8 +96,16 @@ export default function GameOver({
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-2 pt-2.5 border-t border-[#4a2c2a]/10 text-[9px] font-mono text-slate-600 uppercase font-bold">
-            <div>🎈 SAYAP: <span className="font-extrabold text-[#4a2c2a]">{jumps}X</span></div>
-            <div className="text-right">🎋 BAMBU: <span className="font-extrabold text-[#4a2c2a]">{pipesPassed}</span></div>
+            {jumps > 0 ? (
+              <div>🎈 SAYAP: <span className="font-extrabold text-[#4a2c2a]">{jumps}X</span></div>
+            ) : (
+              <div>🏓 SKOR GOL: <span className="font-extrabold text-[#4a2c2a]">{score}</span></div>
+            )}
+            {pipesPassed > 0 ? (
+              <div className="text-right">🎋 BAMBU: <span className="font-extrabold text-[#4a2c2a]">{pipesPassed}</span></div>
+            ) : (
+              <div className="text-right">⚡ GAME: <span className="font-extrabold text-[#4a2c2a]">HOCKEY</span></div>
+            )}
           </div>
         </div>
 

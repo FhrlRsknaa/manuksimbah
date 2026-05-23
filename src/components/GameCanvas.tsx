@@ -10,7 +10,7 @@ interface GameCanvasProps {
   onScoreUpdate: (score: number) => void;
   customBirdUrl: string | null;
   difficulty: 'easy' | 'hard' | 'ultimate';
-  gameMode: 'classic' | 'race';
+  gameMode: 'classic' | 'race' | 'hockey';
 }
 
 const EASY_CONFIG: GameConfig = {
@@ -94,6 +94,16 @@ export default function GameCanvas({
   const backgroundScrollRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
 
+  // Air Hockey entities
+  const puckRef = useRef({ x: 210, y: 310, vx: 0, vy: 0, radius: 11 });
+  const playerMalletRef = useRef({ x: 210, y: 515, radius: 25, vx: 0, vy: 0 });
+  const botMalletRef = useRef({ x: 210, y: 105, radius: 25, vx: 0, vy: 0 });
+  const botScoreRef = useRef(0);
+  const playerScoreRef = useRef(0);
+  const goalTimerRef = useRef(0);
+  const goalMessageRef = useRef('');
+  const pointerRef = useRef({ x: 210, y: 515, isDown: false });
+
   // Monitor custom URL to reset loaded assets
   useEffect(() => {
     if (customBirdUrl) {
@@ -130,7 +140,10 @@ export default function GameCanvas({
       if (gameState === 'PLAYING') {
         if (e.code === 'Space' || e.code === 'ArrowUp') {
           e.preventDefault();
-          triggerFlap();
+          const { gameMode } = currentPropsRef.current;
+          if (gameMode !== 'hockey') {
+            triggerFlap();
+          }
         }
       }
     };
@@ -294,13 +307,56 @@ export default function GameCanvas({
     }
   };
 
+  const getCanvasCoordinates = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 210, y: 515 };
+    const rect = canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * CANVAS_WIDTH;
+    const y = ((e.clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+    return { x, y };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { gameMode } = currentPropsRef.current;
+    if (gameMode !== 'hockey') return;
+    
+    const coords = getCanvasCoordinates(e);
+    pointerRef.current = { x: coords.x, y: coords.y, isDown: true };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { gameMode } = currentPropsRef.current;
+    if (gameMode !== 'hockey') return;
+    
+    if (pointerRef.current.isDown) {
+      const coords = getCanvasCoordinates(e);
+      pointerRef.current.x = coords.x;
+      pointerRef.current.y = coords.y;
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { gameMode } = currentPropsRef.current;
+    if (gameMode !== 'hockey') return;
+    
+    pointerRef.current.isDown = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {}
+  };
+
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    const { gameMode } = currentPropsRef.current;
+    if (gameMode === 'hockey') return;
     triggerFlap();
   };
 
   const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    const { gameMode } = currentPropsRef.current;
+    if (gameMode === 'hockey') return;
     triggerFlap();
   };
 
@@ -337,7 +393,34 @@ export default function GameCanvas({
     raceObstaclesRef.current = [];
     particlesRef.current = [];
 
-    if (activeGameMode === 'race') {
+    if (activeGameMode === 'hockey') {
+      puckRef.current = {
+        x: CANVAS_WIDTH / 2,
+        y: CANVAS_HEIGHT / 2,
+        vx: (Math.random() - 0.5) * 4,
+        vy: Math.random() < 0.5 ? -3.5 : 3.5,
+        radius: 11
+      };
+      playerMalletRef.current = {
+        x: CANVAS_WIDTH / 2,
+        y: 515,
+        radius: 25,
+        vx: 0,
+        vy: 0
+      };
+      botMalletRef.current = {
+        x: CANVAS_WIDTH / 2,
+        y: 105,
+        radius: 25,
+        vx: 0,
+        vy: 0
+      };
+      botScoreRef.current = 0;
+      playerScoreRef.current = 0;
+      goalTimerRef.current = 0;
+      goalMessageRef.current = '';
+      pointerRef.current = { x: CANVAS_WIDTH / 2, y: 515, isDown: false };
+    } else if (activeGameMode === 'race') {
       spawnRaceObstacle();
     } else {
       spawnPipe();
@@ -439,10 +522,259 @@ export default function GameCanvas({
     }, 450);
   };
 
+  const resetPuck = () => {
+    puckRef.current = {
+      x: CANVAS_WIDTH / 2,
+      y: CANVAS_HEIGHT / 2,
+      vx: (Math.random() - 0.5) * 5,
+      vy: Math.random() < 0.5 ? -4 : 4,
+      radius: 11
+    };
+    
+    playerMalletRef.current = {
+      x: CANVAS_WIDTH / 2,
+      y: 515,
+      radius: 25,
+      vx: 0,
+      vy: 0
+    };
+    
+    botMalletRef.current = {
+      x: CANVAS_WIDTH / 2,
+      y: 105,
+      radius: 25,
+      vx: 0,
+      vy: 0
+    };
+  };
+
+  const updateBotAI = (diff: 'easy' | 'hard' | 'ultimate') => {
+    const puck = puckRef.current;
+    const bot = botMalletRef.current;
+    
+    let targetX = CANVAS_WIDTH / 2;
+    let targetY = 105;
+    let speedLimit = 2.4;
+    let predictionError = 16;
+    
+    if (diff === 'easy') {
+      speedLimit = 2.5;
+      predictionError = 24;
+      if (puck.y < CANVAS_HEIGHT / 2) {
+        targetX = puck.x + (Math.sin(frameCountRef.current * 0.05) * predictionError);
+        targetY = Math.min(CANVAS_HEIGHT * 0.3, puck.y - 12);
+      }
+    } else if (diff === 'hard') {
+      speedLimit = 5.2;
+      predictionError = 6;
+      if (puck.y < CANVAS_HEIGHT * 0.72) {
+        targetX = puck.x + (Math.sin(frameCountRef.current * 0.08) * predictionError);
+        targetY = Math.min(CANVAS_HEIGHT * 0.42, puck.y - 10);
+      }
+    } else {
+      // ULTIMATE Difficulty! Relentless aggressive bot!
+      speedLimit = 9.8; 
+      targetX = puck.x;
+      
+      if (puck.y < CANVAS_HEIGHT * 0.55) {
+        // If puck is fast & heading sidewall, predictive intercept
+        if (Math.abs(puck.vx) > 3) {
+          const timeToMe = (puck.y - bot.y) / Math.max(0.1, Math.abs(puck.vy));
+          const predictedX = puck.x + puck.vx * timeToMe;
+          if (predictedX > 20 && predictedX < 400) {
+            targetX = predictedX;
+          }
+        }
+        
+        // Attack the puck rapidly
+        targetY = puck.y - 4;
+      } else {
+        // Position defensively close to our goal center
+        targetX = (puck.x + CANVAS_WIDTH / 2) / 2;
+        targetY = 105;
+      }
+    }
+    
+    const dx = targetX - bot.x;
+    const dy = targetY - bot.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 1.2) {
+      const move = Math.min(dist, speedLimit);
+      bot.vx = (dx / dist) * move;
+      bot.vy = (dy / dist) * move;
+      bot.x += bot.vx;
+      bot.y += bot.vy;
+    } else {
+      bot.vx = 0;
+      bot.vy = 0;
+    }
+    
+    // Bounds for Bot mallet
+    const r = bot.radius;
+    if (bot.x < 20 + r) bot.x = 20 + r;
+    if (bot.x > 400 - r) bot.x = 400 - r;
+    if (bot.y < 20 + r) bot.y = 20 + r;
+    if (bot.y > (CANVAS_HEIGHT / 2) - r - 10) bot.y = (CANVAS_HEIGHT / 2) - r - 10;
+  };
+
+  const updateHockeyMode = () => {
+    const puck = puckRef.current;
+    const bot = botMalletRef.current;
+    const player = playerMalletRef.current;
+    const { difficulty } = currentPropsRef.current;
+    
+    if (goalTimerRef.current > 0) {
+      goalTimerRef.current--;
+      if (goalTimerRef.current === 0) {
+        resetPuck();
+      }
+      return;
+    }
+    
+    // Move bot
+    updateBotAI(difficulty);
+    
+    // Move player based on inputs
+    const lastPlayerX = player.x;
+    const lastPlayerY = player.y;
+    
+    let targetX = pointerRef.current.x;
+    let targetY = pointerRef.current.y;
+    
+    // Keep player mallet in bottom half of table
+    const r = player.radius;
+    const minX = 20 + r;
+    const maxX = 400 - r;
+    const minY = (CANVAS_HEIGHT / 2) + r + 10;
+    const maxY = 600 - r;
+    
+    if (targetX < minX) targetX = minX;
+    if (targetX > maxX) targetX = maxX;
+    if (targetY < minY) targetY = minY;
+    if (targetY > maxY) targetY = maxY;
+    
+    player.x = targetX;
+    player.y = targetY;
+    player.vx = player.x - lastPlayerX;
+    player.vy = player.y - lastPlayerY;
+    
+    // Update Puck kinematics
+    puck.vx *= 0.992;
+    puck.vy *= 0.992;
+    puck.x += puck.vx;
+    puck.y += puck.vy;
+    
+    // Wall bounce
+    if (puck.x - puck.radius <= 20) {
+      puck.x = 20 + puck.radius;
+      puck.vx = -puck.vx * 0.95;
+      gameAudio.playJumpSound();
+    } else if (puck.x + puck.radius >= 400) {
+      puck.x = 400 - puck.radius;
+      puck.vx = -puck.vx * 0.95;
+      gameAudio.playJumpSound();
+    }
+    
+    const goalLeft = 140;
+    const goalRight = 280;
+    
+    // Check Top Goal (Player scores!)
+    if (puck.y - puck.radius <= 20) {
+      if (puck.x > goalLeft && puck.x < goalRight) {
+        playerScoreRef.current += 1;
+        scoreRef.current = playerScoreRef.current;
+        onScoreUpdate(playerScoreRef.current);
+        
+        goalTimerRef.current = 75;
+        goalMessageRef.current = "ANDA GOL!!";
+        
+        gameAudio.playScoreSound();
+        spawnParticles(puck.x, puck.y, 'sparkle', 18, '#10b981');
+        
+        if (playerScoreRef.current >= 7) {
+          triggerGameOver();
+        }
+      } else {
+        puck.y = 20 + puck.radius;
+        puck.vy = -puck.vy * 0.95;
+        gameAudio.playJumpSound();
+      }
+    }
+    
+    // Check Bottom Goal (Bot scores!)
+    if (puck.y + puck.radius >= 600) {
+      if (puck.x > goalLeft && puck.x < goalRight) {
+        botScoreRef.current += 1;
+        
+        goalTimerRef.current = 75;
+        goalMessageRef.current = "BOT SKOR!";
+        
+        gameAudio.playHitSound();
+        spawnParticles(puck.x, puck.y, 'leaf', 18, '#ef4444');
+        
+        if (botScoreRef.current >= 7) {
+          triggerGameOver();
+        }
+      } else {
+        puck.y = 600 - puck.radius;
+        puck.vy = -puck.vy * 0.95;
+        gameAudio.playJumpSound();
+      }
+    }
+    
+    // Mallets collision check
+    const resolveCollision = (m: typeof player) => {
+      const dx = puck.x - m.x;
+      const dy = puck.y - m.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = puck.radius + m.radius;
+      
+      if (dist < minDist) {
+        const o = minDist - dist;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        
+        // Push puck actively out
+        puck.x += nx * (o + 0.5);
+        puck.y += ny * (o + 0.5);
+        
+        const rvx = puck.vx - m.vx;
+        const rvy = puck.vy - m.vy;
+        const vn = rvx * nx + rvy * ny;
+        
+        if (vn < 0) {
+          const rScalar = -(1 + 0.93) * vn;
+          puck.vx += nx * rScalar + m.vx * 0.42;
+          puck.vy += ny * rScalar + m.vy * 0.42;
+          
+          let speed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy);
+          const capSpeed = difficulty === 'ultimate' ? 19.5 : 14.0;
+          if (speed > capSpeed) {
+            puck.vx = (puck.vx / speed) * capSpeed;
+            puck.vy = (puck.vy / speed) * capSpeed;
+          }
+          
+          gameAudio.playJumpSound();
+          spawnParticles(puck.x, puck.y, 'sparkle', 6, '#fbbf24');
+        }
+      }
+    };
+    
+    resolveCollision(player);
+    resolveCollision(bot);
+  };
+
   // Physics update step
   const updateGame = () => {
     const { gameMode, config } = currentPropsRef.current;
     frameCountRef.current++;
+
+    if (gameMode === 'hockey') {
+      updateHockeyMode();
+      return;
+    }
+
     const bird = birdRef.current;
     const groundLimit = CANVAS_HEIGHT - 100;
 
@@ -694,6 +1026,247 @@ export default function GameCanvas({
     }
   };
 
+  const drawHockeyTable = (ctx: CanvasRenderingContext2D) => {
+    // 1. Sleek Ice surface
+    ctx.fillStyle = '#1e293b'; // Slate ice-rink
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // 2. Glowing outer wall
+    ctx.fillStyle = '#0f172a'; // dark border
+    ctx.fillRect(0, 0, CANVAS_WIDTH, 20); // Top wall spacer
+    ctx.fillRect(0, CANVAS_HEIGHT - 20, CANVAS_WIDTH, 20); // Bottom wall spacer
+    ctx.fillRect(0, 0, 20, CANVAS_HEIGHT); // Left wall spacer
+    ctx.fillRect(CANVAS_WIDTH - 20, 0, 20, CANVAS_HEIGHT); // Right wall spacer
+
+    // 3. Table luxury mahogany/neon framing
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#4a2c2a'; // wood look
+    ctx.strokeRect(10, 10, CANVAS_WIDTH - 20, CANVAS_HEIGHT - 20);
+    
+    // Golden border rim line
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#8b5a2b';
+    ctx.strokeRect(20, 20, CANVAS_WIDTH - 40, CANVAS_HEIGHT - 40);
+
+    // 4. Center Line
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)'; // Sleek neon blue
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(20, CANVAS_HEIGHT / 2);
+    ctx.lineTo(CANVAS_WIDTH - 20, CANVAS_HEIGHT / 2);
+    ctx.stroke();
+
+    // Center circle
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.05)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 54, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.beginPath();
+    ctx.arc(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 5. Goal Zone Creases (D-arcs)
+    const goalLeft = 140;
+    const goalRight = 280;
+
+    // Top D-zone (Red)
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.45)';
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.04)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(CANVAS_WIDTH / 2, 20, 75, 0, Math.PI);
+    ctx.stroke();
+    ctx.fill();
+
+    // Bottom D-zone (Red)
+    ctx.beginPath();
+    ctx.arc(CANVAS_WIDTH / 2, 600, 75, Math.PI, 0);
+    ctx.stroke();
+    ctx.fill();
+
+    // Draw the goals cutouts (dark void)
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(goalLeft, 10, goalRight - goalLeft, 10);
+    ctx.fillRect(goalLeft, 600, goalRight - goalLeft, 10);
+
+    // White goal limit post lines
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(goalLeft, 20);
+    ctx.lineTo(goalRight, 20);
+    ctx.moveTo(goalLeft, 600);
+    ctx.lineTo(goalRight, 600);
+    ctx.stroke();
+
+    // 6. Draw glowing retro scores right onto the ice board
+    ctx.font = '900 48px Courier, "JetBrains Mono", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Bot score (Translucent neon red)
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.16)';
+    ctx.fillText(botScoreRef.current.toString(), CANVAS_WIDTH / 2, (CANVAS_HEIGHT / 2) - 65);
+    
+    // Player score (Translucent neon blue)
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.16)';
+    ctx.fillText(playerScoreRef.current.toString(), CANVAS_WIDTH / 2, (CANVAS_HEIGHT / 2) + 65);
+  };
+
+  const drawPuck = (ctx: CanvasRenderingContext2D) => {
+    ctx.save();
+    const p = puckRef.current;
+    
+    // Puck glow
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#f43f5e';
+    
+    // Radial metallic gradients
+    const grad = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, p.radius);
+    grad.addColorStop(0, '#fda4af');
+    grad.addColorStop(0.7, '#e11d48');
+    grad.addColorStop(1, '#881337');
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Bright surface highlight lid
+    ctx.strokeStyle = '#ffe4e6';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * 0.45, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.restore();
+  };
+
+  const drawMallet = (ctx: CanvasRenderingContext2D, mallet: typeof playerMalletRef.current, isBot: boolean) => {
+    ctx.save();
+    
+    // Glowing neon shadow
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = isBot ? '#f43f5e' : '#38bdf8';
+    
+    // Solid base disc placement
+    const grad = ctx.createRadialGradient(mallet.x, mallet.y, 4, mallet.x, mallet.y, mallet.radius);
+    if (isBot) {
+      grad.addColorStop(0, '#ffe4e6');
+      grad.addColorStop(0.65, '#f43f5e');
+      grad.addColorStop(1, '#9f1239');
+    } else {
+      grad.addColorStop(0, '#e0f2fe');
+      grad.addColorStop(0.65, '#38bdf8');
+      grad.addColorStop(1, '#0369a1');
+    }
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(mallet.x, mallet.y, mallet.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pure silver outline
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Draw integrated face character knob
+    ctx.save();
+    ctx.translate(mallet.x, mallet.y);
+    if (isBot) {
+      ctx.rotate(Math.PI); // flipped upside down for adversarial bot
+    }
+
+    const rawImg = birdImgRef.current;
+    const processedImg = processedBirdCanvasRef.current;
+    const size = mallet.radius * 1.15;
+
+    if (processedImg) {
+      ctx.drawImage(processedImg, -size / 2, -size / 2, size, size);
+    } else if (rawImg) {
+      ctx.drawImage(rawImg, -size / 2, -size / 2, size, size);
+    } else {
+      // Vector bird backup character style
+      ctx.fillStyle = isBot ? '#dc2626' : '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Eyes
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(-size * 0.15, -size * 0.05, 2, 0, Math.PI * 2);
+      ctx.arc(size * 0.15, -size * 0.05, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sharp beak
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.2, size * 0.05);
+      ctx.lineTo(size * 0.2, size * 0.05);
+      ctx.lineTo(0, size * 0.25);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  };
+
+  const drawGoalFlash = (ctx: CanvasRenderingContext2D) => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.42)'; // overlay
+    ctx.fillRect(20, 20, CANVAS_WIDTH - 40, CANVAS_HEIGHT - 40);
+    
+    const isPlayerGoal = goalMessageRef.current.includes('ANDA');
+    
+    // Massive pulsating central ribbon
+    const boxY = CANVAS_HEIGHT / 2 - 50;
+    const boxHeight = 100;
+    
+    const boxGrad = ctx.createLinearGradient(0, boxY, 0, boxY + boxHeight);
+    boxGrad.addColorStop(0, 'rgba(15, 23, 42, 0.9)');
+    boxGrad.addColorStop(1, 'rgba(15, 30, 54, 0.95)');
+    ctx.fillStyle = boxGrad;
+    ctx.fillRect(0, boxY, CANVAS_WIDTH, boxHeight);
+    
+    // Border line for GOAL block
+    ctx.strokeStyle = isPlayerGoal ? '#10b981' : '#f43f5e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, boxY);
+    ctx.lineTo(CANVAS_WIDTH, boxY);
+    ctx.moveTo(0, boxY + boxHeight);
+    ctx.lineTo(CANVAS_WIDTH, boxY + boxHeight);
+    ctx.stroke();
+
+    // Goal Message
+    ctx.font = '900 38px "Courier New", "JetBrains Mono", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isPlayerGoal ? '#10b981' : '#f43f5e';
+    
+    // Neon shadow glow
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = isPlayerGoal ? '#10b981' : '#f43f5e';
+    ctx.fillText(goalMessageRef.current, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 12);
+    
+    // Score update
+    ctx.shadowBlur = 0;
+    ctx.font = 'bold 12px font-mono, "JetBrains Mono", monospace';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(`SKOR SEKARANG: ANDA ${playerScoreRef.current} - ${botScoreRef.current} BOT`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 24);
+    
+    ctx.restore();
+  };
+
   // High performance custom Canvas drawings
   const drawGame = () => {
     const { gameMode } = currentPropsRef.current;
@@ -705,6 +1278,39 @@ export default function GameCanvas({
 
     // Clear whole container
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    if (gameMode === 'hockey') {
+      drawHockeyTable(ctx);
+      
+      // Draw hockey-specific particles (feather/leaves sparkle dust trail)
+      particlesRef.current.forEach((p) => {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.size * 0.75, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+      
+      // Draw puck
+      drawPuck(ctx);
+      
+      // Draw player mallet
+      drawMallet(ctx, playerMalletRef.current, false);
+      
+      // Draw bot mallet
+      drawMallet(ctx, botMalletRef.current, true);
+      
+      // If scorer countdown active, draw banner
+      if (goalTimerRef.current > 0) {
+        drawGoalFlash(ctx);
+      }
+      return;
+    }
 
     // 1. DRAW SCROLLING AMBIENT BACKGROUNDS
     if (bgImgRef.current) {
@@ -1264,6 +1870,9 @@ export default function GameCanvas({
         height={CANVAS_HEIGHT}
         onClick={handleCanvasClick}
         onTouchStart={handleCanvasTouchStart}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
         className="cursor-pointer max-w-full rounded-2xl border-4 border-amber-900/65 shadow-2xl overflow-hidden aspect-[420/620] touch-none select-none"
         id="game-canvas"
       />
@@ -1271,7 +1880,7 @@ export default function GameCanvas({
       {/* Visual Keyboard prompt overlay (Hidden on play to prevent clutter) */}
       {gameState === 'PLAYING' && (
         <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 bg-black/45 backdrop-blur-md px-3.5 py-1.5 rounded-full text-[10px] text-white/90 font-mono tracking-widest font-bold pointer-events-none uppercase transition-opacity">
-          SPIASI / TAP UNTUK TERBANG
+          {gameMode === 'hockey' ? 'GESER PEMUKUL UNTUK NYMEK!' : 'SPIASI / TAP UNTUK TERBANG'}
         </div>
       )}
     </div>
