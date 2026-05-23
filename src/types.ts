@@ -8,6 +8,15 @@ export interface GameConfig {
 }
 
 export type GameState = 'MENU' | 'PLAYING' | 'GAMEOVER';
+export type GameMode = 'classic' | 'race';
+
+export interface RaceObstacle {
+  x: number;
+  width: number;
+  height: number;
+  type: 'block' | 'chasm';
+  passed: boolean;
+}
 
 export interface BirdState {
   y: number;

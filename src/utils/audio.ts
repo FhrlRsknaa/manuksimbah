@@ -24,28 +24,60 @@ class AudioEngine {
   }
 
   private preloadLocalFiles() {
-    // Attempt to pre-create Audio instances for the default local paths.
-    // If they exist and are populated, they will play. If they fail or don't exist,
-    // we'll handle gracefully and fallback to the synthetic procedural retro audio.
-    const tryLoad = (path: string, successCallback: (audio: HTMLAudioElement) => void) => {
-      const audio = new Audio(path);
-      audio.volume = this.volume;
+    // Attempt sequentially to load standard and public audio paths.
+    // Highly robust fallback. Uses the first one that succeeded, else defaults to procedurally generated chiptunes.
+    const tryLoadPaths = (paths: string[], successCallback: (audio: HTMLAudioElement) => void) => {
+      let index = 0;
       
-      const onCanPlay = () => {
-        successCallback(audio);
-        audio.removeEventListener('canplaythrough', onCanPlay);
-        audio.removeEventListener('loadeddata', onCanPlay);
+      const tryNext = () => {
+        if (index >= paths.length) return;
+        const currentPath = paths[index];
+        const audio = new Audio(currentPath);
+        audio.volume = this.volume;
+        
+        const onCanPlay = () => {
+          successCallback(audio);
+          audio.removeEventListener('canplaythrough', onCanPlay);
+          audio.removeEventListener('loadeddata', onCanPlay);
+          audio.removeEventListener('error', onError);
+        };
+        
+        const onError = () => {
+          audio.removeEventListener('canplaythrough', onCanPlay);
+          audio.removeEventListener('loadeddata', onCanPlay);
+          audio.removeEventListener('error', onError);
+          index++;
+          tryNext();
+        };
+        
+        audio.addEventListener('canplaythrough', onCanPlay);
+        audio.addEventListener('loadeddata', onCanPlay);
+        audio.addEventListener('error', onError);
+        audio.load();
       };
-      
-      audio.addEventListener('canplaythrough', onCanPlay);
-      audio.addEventListener('loadeddata', onCanPlay);
-      audio.addEventListener('error', () => {
-        // Fail silently and use synth synthesizer
-      });
-      audio.load();
+
+      tryNext();
     };
 
-    tryLoad(this.localPaths.bgm, (audio) => {
+    const bgmPaths = [
+      '/music.mp3',
+      '/audio/music.mp3',
+      '/src/assets/audio/music.mp3'
+    ];
+
+    const jumpPaths = [
+      '/jump.mp3',
+      '/audio/jump.mp3',
+      '/src/assets/audio/jump.mp3'
+    ];
+
+    const hitPaths = [
+      '/hit.mp3',
+      '/audio/hit.mp3',
+      '/src/assets/audio/hit.mp3'
+    ];
+
+    tryLoadPaths(bgmPaths, (audio) => {
       audio.loop = true;
       this.customMusicFile = audio;
       // If music is already playing synth, switch to this
@@ -56,11 +88,11 @@ class AudioEngine {
       }
     });
 
-    tryLoad(this.localPaths.jump, (audio) => {
+    tryLoadPaths(jumpPaths, (audio) => {
       this.customJumpFile = audio;
     });
 
-    tryLoad(this.localPaths.hit, (audio) => {
+    tryLoadPaths(hitPaths, (audio) => {
       this.customHitFile = audio;
     });
   }

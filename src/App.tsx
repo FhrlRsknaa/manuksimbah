@@ -5,11 +5,13 @@ import { Sparkles, Compass, Bird } from 'lucide-react';
 import MainMenu from './components/MainMenu';
 import GameOver from './components/GameOver';
 import GameCanvas from './components/GameCanvas';
-import { GameState, GameStats } from './types';
+import { GameState, GameStats, GameMode } from './types';
 import { gameAudio } from './utils/audio';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('MENU');
+  const [gameMode, setGameMode] = useState<GameMode>('classic');
+  const [difficulty, setDifficulty] = useState<'easy' | 'hard' | 'ultimate'>('easy');
   
   // Custom file states
   const [customBirdUrl, setCustomBirdUrl] = useState<string | null>(null);
@@ -32,7 +34,8 @@ export default function App() {
     }
   }, []);
 
-  const handleStartGame = () => {
+  const handleStartGame = (mode: GameMode) => {
+    setGameMode(mode);
     setGameState('PLAYING');
     // Run the beautiful Javanese loop background music
     gameAudio.playMusic();
@@ -107,6 +110,8 @@ export default function App() {
             onGameOver={handleGameOver}
             onScoreUpdate={handleScoreUpdate}
             customBirdUrl={customBirdUrl}
+            difficulty={difficulty}
+            gameMode={gameMode}
           />
 
           {/* Overlays styled with AnimatePresence */}
@@ -127,6 +132,8 @@ export default function App() {
                   onCustomJump={handleCustomJump}
                   customBirdName={customBirdName}
                   customBgmName={customBgmName}
+                  difficulty={difficulty}
+                  onDifficultyChange={setDifficulty}
                 />
               </motion.div>
             )}
@@ -144,7 +151,7 @@ export default function App() {
                   highScore={stats.highScore}
                   pipesPassed={stats.pipesPassed}
                   jumps={stats.jumps}
-                  onRestart={handleStartGame}
+                  onRestart={() => handleStartGame(gameMode)}
                   onGoToMenu={handleGoToMenu}
                 />
               </motion.div>
